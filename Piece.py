@@ -233,11 +233,6 @@ class Pawn(Piece):
                     self.cases.append(move)
                     self.attack_king(move)
 
-    def move(self, pos):
-        super().move(pos)
-        if self.position == (7, 0)[self.color]:
-            self.transform()
-
     def check_pin(self):
         if len(self.pinning) > 0:
             for pinner, move in self.pinning.items():
