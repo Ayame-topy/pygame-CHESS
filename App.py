@@ -24,8 +24,7 @@ class App:
                     self.running = False
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
-                    if 100 <= pos[0] <= 700:
-                        self.game.on_click(pos)
+                    self.game.on_click(pos)
 
             pygame.display.flip()
 
