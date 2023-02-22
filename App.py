@@ -19,6 +19,8 @@ class App:
 
     def main_loop(self):
         while self.running:
+            if self.game.engine_play:
+                self.game.get_engine_move()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
