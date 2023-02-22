@@ -1,7 +1,9 @@
 import pygame
-from CONSTANTS import ROW_SIZE, WHITE_ROWS_COLOR, BLACK_ROWS_COLOR, MOVES_ROUNDS_COLOR, END_SCREEN_COLOR
+from CONSTANTS import ROW_SIZE, WHITE_ROWS_COLOR, BLACK_ROWS_COLOR, MOVES_ROUNDS_COLOR, END_SCREEN_COLOR, SHOW_MOVE_COLOR
 from Piece import *
-from math import floor
+from math import floor, ceil
+from stockfishpy.stockfishpy import *
+from time import time
 
 
 class Game:
@@ -9,15 +11,21 @@ class Game:
         self.board, self.matrix, self.pieces_matrix, self.controlled_cases = self.init_board()
         set_board(self.matrix, self.pieces_matrix, self.controlled_cases)
         self.teams = [[], []]
+        self.engine_play = False
         self.selected_piece = None
         self.playing = True
         self.screen = pygame.display.get_surface()
         self.sounds = {}
         self.init_sounds()
         self.init_pieces()
+        self.last_move = []
         self.update_board()
         self.playing_team = 1
         self.update_pieces()
+        self.engine = None
+        self.init_engine()
+        self.position = []
+
 
     def init_board(self):
         # Create board
@@ -58,8 +66,12 @@ class Game:
         for sound in ('capture', 'move', 'castle', 'check', 'game_over'):
             self.sounds[sound] = pygame.mixer.Sound(file=fr'Sounds\{sound}.mp3')
 
+    def init_engine(self):
+        self.engine = Engine('stockfish.exe', param={'Skill Level': 10})
+        self.engine.ucinewgame()
+
     def play_sound(self, sound):
-        pygame.mixer.pause()
+        pygame.mixer.stop()
         self.sounds[sound].play()
 
     def blit_board(self):
@@ -77,8 +89,15 @@ class Game:
                 x, y = m
                 pygame.draw.circle(self.screen, MOVES_ROUNDS_COLOR, (x*ROW_SIZE+ROW_SIZE/2, y*ROW_SIZE+ROW_SIZE/2), ROW_SIZE/4)
 
+    def show_last_move(self):
+        if len(self.last_move) > 0:
+            (x,y), (x_, y_) = self.last_move
+            pygame.draw.rect(self.screen, SHOW_MOVE_COLOR, (floor(ROW_SIZE*x), floor(ROW_SIZE*y), ceil(ROW_SIZE), ceil(ROW_SIZE)))
+            pygame.draw.rect(self.screen, SHOW_MOVE_COLOR, (floor(ROW_SIZE*x_), floor(ROW_SIZE*y_), ceil(ROW_SIZE), ceil(ROW_SIZE)))
+
     def update_board(self):
         self.blit_board()
+        self.show_last_move()
         self.blit_pieces()
         self.blit_piece_moves()
 
@@ -103,7 +122,12 @@ class Game:
                                 self.play_sound('move')
                         else:
                             self.play_sound('move')
+                    self.last_move.clear()
+                    pos1 = self.selected_piece.position
+                    self.last_move.append(pos1)
+                    self.last_move.append((x, y))
                     self.selected_piece.move((x, y))
+                    self.position.append(self.pos_to_str(pos1, (x, y)))
                     if type(self.selected_piece) is Pawn:
                         self.check_passed_pawn(self.selected_piece)
                     self.change_playing_team()
@@ -127,6 +151,15 @@ class Game:
             for piece in team:
                 piece.update()
         self.on_check()
+        if self.playing_team == 0:
+            self.engine_play = True
+
+    def pos_to_str(self, pos1, pos2):
+        x, y = pos1
+        x_, y_ = pos2
+        y = (8,7,6,5,4,3,2,1)[y]
+        y_ = (8,7,6,5,4,3,2,1)[y_]
+        return 'abcdefgh'[x] + str(y) + 'abcdefgh'[x_] + str(y_)
 
     def change_playing_team(self):
         self.playing_team = [1, 0][self.playing_team]
@@ -177,6 +210,7 @@ class Game:
             new_piece = Queen(pawn.color, pawn.position)
             self.teams[pawn.color].append(new_piece)
             self.teams[pawn.color].remove(pawn)
+            self.position[-1] += 'q'
 
     def check_draw(self):
         a, b = [len(team) for team in self.teams]
@@ -202,9 +236,10 @@ class Game:
         self.get_end_screen(f'Game is Draw for {way}')
 
     def get_end_screen(self, message):
+        self.engine_play = False
         self.playing = False
         font = pygame.font.SysFont('Arial', 50)
-        screen = pygame.Surface((ROW_SIZE*4, ROW_SIZE*4))
+        screen = pygame.Surface((ROW_SIZE*2, ROW_SIZE*2))
         screen.fill(END_SCREEN_COLOR)
         text = font.render(message, True, (200, 200, 200))
         text = pygame.transform.scale(text, (screen.get_width(), (text.get_height()*screen.get_width()/text.get_width())))
@@ -213,4 +248,25 @@ class Game:
         screen.blit(text, (0, screen.get_height()/2 - text.get_height()/2))
         screen.blit(help, (screen.get_width()/2-help.get_width()/2, screen.get_height()-help.get_height()))
         self.play_sound('game_over')
-        self.screen.blit(screen, (ROW_SIZE*2, ROW_SIZE*2))
+        self.screen.blit(screen, (ROW_SIZE*3, ROW_SIZE*3))
+
+    def str_to_pos(self, txt):
+        txt = txt[:4]
+        (x, y), (x_, y_) = txt[:-2], txt[2:]
+        y, y_ = int(y), int(y_)
+        y = (7, 6, 5, 4, 3 , 2, 1 , 0)[y-1]
+        y_ = (7, 6, 5, 4, 3 , 2, 1 , 0)[y_-1]
+
+        return ('abcdefgh'.index(x), y), ('abcdefgh'.index(x_), y_)
+
+    def get_engine_move(self):
+        t = time()
+        self.engine.setposition(self.position)
+        move = self.engine.bestmove()['bestmove']
+        if move == '(none)': return
+        mv1, mv2 = self.str_to_pos(move)
+        self.selected_piece = self.pieces_matrix[mv1[0]][mv1[1]]
+        while time()-t < 0.5:
+            pass
+        self.on_click((mv2[0]*ROW_SIZE, mv2[1]*ROW_SIZE))
+        self.engine_play = False
