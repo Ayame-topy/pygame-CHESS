@@ -16,15 +16,15 @@ class Game:
         self.playing = True
         self.screen = pygame.display.get_surface()
         self.sounds = {}
+        self.position = []
+        self.engine = None
+        self.last_move = []
+        self.playing_team = 1
         self.init_sounds()
         self.init_pieces()
-        self.last_move = []
-        self.update_board()
-        self.playing_team = 1
-        self.update_pieces()
-        self.engine = None
         self.init_engine()
-        self.position = []
+        self.update_board()
+        self.update_pieces()
 
 
     def init_board(self):
